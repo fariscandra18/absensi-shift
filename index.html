@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDT Warehouse - Realtime Spreadsheet System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --block-yellow: #facc15;
+            --block-blue: #3b82f6;
+            --block-pink: #f472b6;
+            --block-green: #10b981;
+            --block-orange: #fb923c;
+            --block-black: #000000;
+            --block-white: #ffffff;
+            --shadow-offset: 6px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #e2e8f0;
+            color: var(--block-black);
+        }
+
+        #canvas-bg {
+            position: fixed;
+            top: 0; left: 0;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .neo-block {
+            background: var(--block-white);
+            border: 3px solid var(--block-black);
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--block-black);
+            transition: all 0.1s ease;
+        }
+
+        .neo-block:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: calc(var(--shadow-offset) + 2px) calc(var(--shadow-offset) + 2px) 0px var(--block-black);
+        }
+
+        .block-yellow { background-color: var(--block-yellow); }
+        .block-blue { background-color: var(--block-blue); color: white; }
+        .block-pink { background-color: var(--block-pink); }
+        .block-green { background-color: var(--block-green); color: white; }
+        .block-orange { background-color: var(--block-orange); color: white; }
+
+        .neo-button {
+            border: 3px solid var(--block-black);
+            padding: 12px 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            box-shadow: 4px 4px 0px var(--block-black);
+            transition: all 0.05s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .neo-button:active:not(:disabled) {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px var(--block-black);
+        }
+
+        .neo-button:disabled {
+            background-color: #cbd5e1 !important;
+            color: #94a3b8 !important;
+            border-color: #94a3b8 !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 2px 2px 0px #94a3b8;
+            opacity: 0.7;
+        }
+
+        .scanner-container {
+            border: 3px solid var(--block-black);
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: var(--block-yellow);
+            box-shadow: 0 0 15px var(--block-yellow);
+            z-index: 20;
+            animation: moveScan 1.5s infinite alternate ease-in-out;
+            display: none;
+        }
+
+        @keyframes moveScan { from { top: 0; } to { top: 100%; } }
+
+        #cursor-follower {
+            position: fixed;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--block-black);
+            background: var(--block-yellow);
+            pointer-events: none;
+            z-index: 9999;
+            will-change: transform;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cursor-follower"></div>
+    <canvas id="canvas-bg"></canvas>
+
+    <div class="min-h-screen w-full flex flex-col items-center p-4 md:p-10">
+        
+        <header class="w-full max-w-6xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+            <div class="neo-block block-yellow p-4 md:p-6 rotate-[-0.5deg]">
+                <h1 class="text-xl md:text-2xl font-bold tracking-tight uppercase leading-tight">
+                    Pancaran Darat Transport<br>
+                    <span class="bg-black text-white px-2 py-0.5 inline-block mt-1 text-sm">Logistik Warehouse</span>
+                </h1>
+                <p class="font-mono text-[10px] md:text-xs font-bold mt-2 border-t-2 border-black pt-1">
+                    SECTION STORAGE // REALTIME SYSTEM
+                </p>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="neo-block p-4 flex flex-col items-end rotate-[0.5deg] min-w-[180px]">
+                    <div id="clock" class="text-3xl font-mono font-bold text-blue-600">00:00:00</div>
+                    <div id="date" class="text-xs font-bold uppercase tracking-tighter opacity-70">01/01/2024</div>
+                </div>
+                <div class="neo-block p-4 block-green flex flex-col items-center justify-center">
+                    <span class="text-[10px] font-bold uppercase text-center">Status Koneksi</span>
+                    <span id="sync-status" class="text-xs font-bold text-white bg-black px-1">ONLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
+            
+            <!-- Area Input & Kamera -->
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                <div class="neo-block p-2">
+                    <div class="flex items-center justify-between p-2 font-bold text-xs uppercase border-b-2 border-black mb-2">
+                        <span><i class="fas fa-camera mr-2 text-red-500"></i>LIVE_SCANNER</span>
+                        <span id="ot-indicator" class="hidden bg-orange-600 text-white px-2 animate-pulse">STATUS: LEMBUR</span>
+                    </div>
+                    <div class="scanner-container aspect-video relative">
+                        <video id="video-feed" class="w-full h-full object-cover" autoplay playsinline muted style="transform: scaleX(-1);"></video>
+                        <div id="scan-bar" class="scan-line"></div>
+                        <div class="absolute top-4 left-4 z-10">
+                            <div class="bg-black text-white text-[10px] p-2 font-mono flex flex-col gap-1">
+                                <div class="flex items-center gap-2">
+                                    <div id="gps-dot" class="w-2 h-2 rounded-full bg-red-400"></div>
+                                    <span id="loc-status">MENUNGGU GPS...</span>
+                                </div>
+                                <div id="gps-accuracy" class="text-[8px] opacity-70">Akurasi: -- m</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="requestGPSPermission()" class="w-full mt-2 text-[9px] font-bold bg-gray-100 p-1 hover:bg-yellow-200 border border-black">
+                        <i class="fas fa-sync-alt mr-1"></i> REFRESH GPS
+                    </button>
+                </div>
+
+                <!-- FORM PEMILIHAN KARYAWAN -->
+                <div class="neo-block p-6 space-y-6 bg-white border-4 border-black">
+                    <div class="space-y-3">
+                        <label class="font-bold text-xs uppercase tracking-widest text-black bg-yellow-400 px-2 py-1 inline-block">Wajib Pilih Nama Anda:</label>
+                        <div class="relative">
+                            <select id="emp-select" onchange="handleSelectionChange()" class="w-full border-4 border-black p-4 font-bold bg-white focus:bg-yellow-50 outline-none appearance-none cursor-pointer text-sm">
+                                <option value="">-- SILAHKAN PILIH NAMA --</option>
+                                <option value="17.98.23">MUHAMMAD KIKI KURNIAWAN</option>
+                                <option value="20.98.23">MOHAMAD SANUSI</option>
+                                <option value="02.99.25">FARIS CANDRA</option>
+                                <option value="05.23.26">ANDRIANUS TAMBUNAN</option>
+                            </select>
+                            <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                        <p id="selection-warning" class="text-[10px] text-red-600 font-bold uppercase animate-bounce">
+                            <i class="fas fa-exclamation-triangle"></i> Tombol terkunci! Pilih nama dulu.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-3">
+                            <p class="text-[9px] font-bold text-center border-b-2 border-black pb-1 bg-blue-50">ABSEN REGULER</p>
+                            <button onclick="handleAbsen('IN')" id="btn-in" disabled class="neo-button block-blue w-full">
+                                <i class="fas fa-sign-in-alt"></i> IN
+                            </button>
+                            <button onclick="handleAbsen('OUT')" id="btn-out" disabled class="neo-button block-pink w-full">
+                                <i class="fas fa-sign-out-alt"></i> OUT
+                            </button>
+                        </div>
+
+                        <div class="space-y-3">
+                            <p class="text-[9px] font-bold text-center border-b-2 border-black pb-1 bg-orange-50">LEMBUR (OT)</p>
+                            <button onclick="toggleOT('START')" id="btn-ot-start" disabled class="neo-button block-orange w-full">
+                                <i class="fas fa-clock"></i> IN
+                            </button>
+                            <button onclick="toggleOT('END')" id="btn-ot-end" disabled class="neo-button bg-gray-800 text-white w-full hidden">
+                                <i class="fas fa-stopwatch"></i> OUT
+                            </button>
+                            <div id="ot-disabled-placeholder" class="h-[46px] w-full border-2 border-gray-300 border-dashed flex items-center justify-center text-[8px] font-bold text-gray-400">
+                                OT OFF
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MINI GAME AREA -->
+                <div class="neo-block p-4 bg-white border-4 border-black">
+                    <div class="flex justify-between items-center mb-2 border-b-2 border-black pb-1">
+                        <span class="text-[10px] font-bold">WAREHOUSE STACKER</span>
+                        <span class="text-[10px] font-bold">SCORE: <span id="game-score">0</span></span>
+                    </div>
+                    <div class="relative w-full aspect-[3/2] bg-gray-100 border-2 border-black overflow-hidden">
+                        <canvas id="game-canvas" width="300" height="200" class="w-full h-full"></canvas>
+                    </div>
+                    <button id="start-game-btn" onclick="startGame()" class="w-full mt-2 neo-button block-yellow">MULAI GAME</button>
+                </div>
+            </div>
+
+            <!-- Dashboard & Log -->
+            <div class="lg:col-span-8 flex flex-col gap-6">
+                <!-- Dashboard Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="neo-block p-4 flex flex-col items-center justify-center block-yellow">
+                        <span class="text-[10px] font-bold uppercase opacity-70">Total Transaksi Hari Ini</span>
+                        <span id="stat-total" class="text-3xl font-bold">0</span>
+                    </div>
+                    <div class="neo-block p-4 flex flex-col items-center justify-center">
+                        <span class="text-[10px] font-bold uppercase opacity-70">Periode Cut-Off</span>
+                        <span class="text-[11px] font-bold text-center mt-1 leading-tight">
+                            18 <span id="prev-month" class="text-blue-600">---</span> s/d 17 <span id="curr-month" class="text-blue-600">---</span>
+                        </span>
+                    </div>
+                    <div class="neo-block p-4 block-blue flex flex-col items-center justify-center">
+                        <span class="text-[10px] font-bold uppercase opacity-70 text-white/80">Status System</span>
+                        <span id="system-status" class="text-sm font-bold flex items-center gap-2">
+                            <span class="w-2 h-2 bg-green-400 rounded-full animate-ping"></span> ACTIVE
+                        </span>
+                    </div>
+                </div>
+
+                <div class="neo-block flex-1 flex flex-col overflow-hidden min-h-[400px]">
+                    <div class="p-4 border-b-3 border-black flex justify-between items-center bg-gray-50">
+                        <h2 class="font-bold uppercase flex items-center gap-2 text-sm italic">
+                            <i class="fas fa-database text-blue-600"></i> Log Realtime Warehouse
+                        </h2>
+                        <div class="flex gap-2">
+                             <button onclick="clearLogs()" class="text-[9px] font-bold bg-red-100 border-2 border-black px-2 py-1 hover:bg-red-500 hover:text-white transition-colors">RESET RIWAYAT</button>
+                        </div>
+                    </div>
+                    
+                    <div id="log-container" class="overflow-y-auto flex-1 divide-y-2 divide-black bg-white">
+                        <!-- Transaksi Muncul Di Sini -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-10 mb-20 text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">
+            © 2024 PANCARAN DARAT TRANSPORT SYSTEM v3.4 (REALTIME AUTO-SYNC)
+        </footer>
+    </div>
+
+    <!-- Modal Photo -->
+    <div id="modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden p-4">
+        <div class="neo-block max-w-sm w-full relative">
+            <button onclick="closeModal()" class="absolute -top-4 -right-4 w-10 h-10 bg-white border-3 border-black font-bold">X</button>
+            <img id="modal-img" src="" class="w-full border-b-3 border-black">
+            <div class="p-4 bg-yellow-400">
+                <h3 id="modal-name" class="font-bold text-sm uppercase"></h3>
+                <p id="modal-meta" class="text-[10px] font-mono mt-1"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURATION
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby7_Qgcq8ZDqI7cJhUUjgpocnhjvnNjMPO2bnM-jjP1O1_lwElOjJQU6I9UERghO5kLhg/exec"; 
+
+        const OFFICE_LOC = { lat: -6.1754, lng: 106.8272 }; 
+        const MAX_DIST = 2000; 
+
+        let database = JSON.parse(localStorage.getItem('pdt_db_v3')) || [];
+        let otSessions = JSON.parse(localStorage.getItem('pdt_ot_v3')) || {}; 
+        let isLocValid = false;
+        let watchId = null;
+
+        function updateUI() {
+            const now = new Date();
+            const clockEl = document.getElementById('clock');
+            const dateEl = document.getElementById('date');
+            if(clockEl) clockEl.innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+            if(dateEl) dateEl.innerText = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            const months = ["JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"];
+            const currMEl = document.getElementById('curr-month');
+            const prevMEl = document.getElementById('prev-month');
+            if(currMEl) currMEl.innerText = months[now.getMonth()];
+            if(prevMEl) prevMEl.innerText = months[(now.getMonth() - 1 + 12) % 12];
+        }
+
+        async function initMedia() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 270 } });
+                const videoFeed = document.getElementById('video-feed');
+                if(videoFeed) videoFeed.srcObject = stream;
+            } catch(e) { console.warn("Camera blocked"); }
+            
+            requestGPSPermission();
+        }
+
+        function requestGPSPermission() {
+            if(watchId) navigator.geolocation.clearWatch(watchId);
+            const statusEl = document.getElementById('loc-status');
+            const dotEl = document.getElementById('gps-dot');
+            if(statusEl) statusEl.innerText = "MENCARI GPS...";
+            if(dotEl) dotEl.className = `w-2 h-2 rounded-full bg-yellow-400 animate-pulse`;
+
+            const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+            if(navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (p) => {
+                        const d = calculateDistance(p.coords.latitude, p.coords.longitude, OFFICE_LOC.lat, OFFICE_LOC.lng);
+                        const accuracy = Math.round(p.coords.accuracy);
+                        isLocValid = d <= MAX_DIST;
+                        
+                        const accEl = document.getElementById('gps-accuracy');
+                        const stEl = document.getElementById('loc-status');
+                        const dtEl = document.getElementById('gps-dot');
+                        
+                        if(accEl) accEl.innerText = `Akurasi: ${accuracy} m`;
+                        if(stEl) stEl.innerText = isLocValid ? "LOKASI: WAREHOUSE" : "DI LUAR JANGKAUAN";
+                        if(dtEl) dtEl.className = `w-2 h-2 rounded-full ${isLocValid ? 'bg-green-400' : 'bg-red-500 animate-pulse'}`;
+                        
+                        validateButtons();
+                    }, 
+                    (err) => {
+                        const stEl = document.getElementById('loc-status');
+                        const dtEl = document.getElementById('gps-dot');
+                        if(stEl) stEl.innerText = "GPS ERROR";
+                        if(dtEl) dtEl.className = `w-2 h-2 rounded-full bg-red-600`;
+                        isLocValid = false;
+                        validateButtons();
+                    }, 
+                    options
+                );
+            }
+        }
+
+        function calculateDistance(l1, n1, l2, n2) {
+            const R = 6371e3;
+            const f1 = l1 * Math.PI/180; const f2 = l2 * Math.PI/180;
+            const df = (l2-l1) * Math.PI/180; const dl = (n2-n1) * Math.PI/180;
+            const a = Math.sin(df/2)**2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function handleSelectionChange() {
+            const select = document.getElementById('emp-select');
+            const warning = document.getElementById('selection-warning');
+            if (select && select.value === "") {
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
+            checkOTStatus();
+            validateButtons();
+        }
+
+        function checkOTStatus() {
+            const nik = document.getElementById('emp-select').value;
+            const indicator = document.getElementById('ot-indicator');
+            const btnIn = document.getElementById('btn-ot-start');
+            const btnOut = document.getElementById('btn-ot-end');
+            const placeholder = document.getElementById('ot-disabled-placeholder');
+
+            if (nik && otSessions[nik]) {
+                indicator.classList.remove('hidden');
+                btnIn.classList.add('hidden');
+                btnOut.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                indicator.classList.add('hidden');
+                btnIn.classList.remove('hidden');
+                btnOut.classList.add('hidden');
+                placeholder.classList.add('hidden');
+            }
+        }
+
+        function validateButtons() {
+            const select = document.getElementById('emp-select');
+            const isEmployeeSelected = select && select.value !== "";
+            const canAction = isEmployeeSelected && isLocValid;
+            ['btn-in', 'btn-out', 'btn-ot-start', 'btn-ot-end'].forEach(id => {
+                const btn = document.getElementById(id);
+                if(btn) btn.disabled = !canAction;
+            });
+        }
+
+        function resetForm() {
+            const select = document.getElementById('emp-select');
+            if(select) {
+                select.value = "";
+                handleSelectionChange();
+            }
+        }
+
+        function handleAbsen(type) {
+            const sel = document.getElementById('emp-select');
+            const nik = sel.value;
+            const name = sel.options[sel.selectedIndex].text;
+            submitAction({ nik, name, type });
+        }
+
+        function toggleOT(action) {
+            const sel = document.getElementById('emp-select');
+            const nik = sel.value;
+            const name = sel.options[sel.selectedIndex].text;
+            const now = new Date();
+
+            if(action === 'START') {
+                otSessions[nik] = { start: now.getTime() };
+                submitAction({ nik, name, type: 'OT_IN' });
+            } else {
+                const dur = ((now.getTime() - otSessions[nik].start) / (1000 * 60 * 60)).toFixed(2);
+                submitAction({ nik, name, type: 'OT_OUT', duration: dur });
+                delete otSessions[nik];
+            }
+            localStorage.setItem('pdt_ot_v3', JSON.stringify(otSessions));
+            checkOTStatus();
+        }
+
+        async function submitAction(data) {
+            const scanBar = document.getElementById('scan-bar');
+            if(scanBar) scanBar.style.display = 'block';
+            Swal.fire({ title: 'MEMPROSES...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 320; canvas.height = 180;
+            const videoFeed = document.getElementById('video-feed');
+            if(videoFeed) canvas.getContext('2d').drawImage(videoFeed, 0,0,320,180);
+            const photo = canvas.toDataURL('image/jpeg', 0.5);
+
+            const record = {
+                ...data,
+                id: Date.now(),
+                photo,
+                time: document.getElementById('clock').innerText,
+                date: document.getElementById('date').innerText,
+                ts: Date.now(),
+                synced: false
+            };
+
+            // Tambah ke riwayat lokal
+            database.unshift(record);
+            localStorage.setItem('pdt_db_v3', JSON.stringify(database));
+            renderLogs();
+
+            // Jalankan pengiriman ke Spreadsheet (Async)
+            await sendToSpreadsheet(record);
+
+            if(scanBar) scanBar.style.display = 'none';
+            resetForm(); 
+            Swal.fire({ icon: 'success', title: 'BERHASIL', text: `${data.type} TERKIRIM KE SPREADSHEET`, timer: 1500, showConfirmButton: false });
+        }
+
+        async function sendToSpreadsheet(record) {
+            const statusLabel = document.getElementById('sync-status');
+            if(statusLabel) {
+                statusLabel.innerText = "SENDING...";
+                statusLabel.className = "text-xs font-bold text-white bg-blue-500 px-1";
+            }
+            
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                });
+
+                const target = database.find(x => x.id === record.id);
+                if(target) target.synced = true;
+                localStorage.setItem('pdt_db_v3', JSON.stringify(database));
+                
+                if(statusLabel) {
+                    statusLabel.innerText = "ONLINE";
+                    statusLabel.className = "text-xs font-bold text-white bg-black px-1";
+                }
+                renderLogs();
+            } catch (error) {
+                console.error("Sync Error:", error);
+                if(statusLabel) {
+                    statusLabel.innerText = "OFFLINE";
+                    statusLabel.className = "text-xs font-bold text-white bg-red-600 px-1 animate-pulse";
+                }
+            }
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('log-container');
+            const totalEl = document.getElementById('stat-total');
+            if(totalEl) totalEl.innerText = database.length;
+            
+            if (!container) return;
+            if (database.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-[10px] font-bold opacity-30">BELUM ADA TRANSAKSI HARI INI</div>`;
+                return;
+            }
+
+            container.innerHTML = database.map(l => {
+                let badgeStyle = "bg-gray-200 text-black";
+                if(l.type === 'IN') badgeStyle = "bg-blue-600 text-white";
+                if(l.type === 'OUT') badgeStyle = "bg-pink-600 text-white";
+                if(l.type === 'OT_IN') badgeStyle = "bg-orange-500 text-white";
+                if(l.type === 'OT_OUT') badgeStyle = "bg-black text-white";
+
+                return `
+                <div class="p-4 flex items-center justify-between hover:bg-yellow-50 cursor-pointer border-b border-black/10 transition-all" onclick="openPhoto(${l.id})">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 border-2 border-black rotate-2 overflow-hidden bg-gray-200 relative">
+                            <img src="${l.photo}" class="w-full h-full object-cover">
+                            ${l.synced ? '<i class="fas fa-check-circle absolute bottom-0 right-0 text-green-500 text-[8px] bg-white rounded-full"></i>' : '<i class="fas fa-spinner fa-spin absolute bottom-0 right-0 text-blue-500 text-[8px] bg-white rounded-full"></i>'}
+                        </div>
+                        <div>
+                            <p class="font-bold text-[11px] uppercase tracking-tight">${l.name}</p>
+                            <p class="text-[9px] font-mono opacity-60">${l.date} • ${l.time}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                        <span class="px-3 py-1 border-2 border-black text-[9px] font-bold ${badgeStyle}">
+                            ${l.type} ${l.duration ? '• '+l.duration+'H' : ''}
+                        </span>
+                        <span class="text-[7px] font-bold uppercase ${l.synced ? 'text-green-600' : 'text-gray-400'}">${l.synced ? 'Berhasil Terkirim' : 'Mengirim ke Cloud...'}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openPhoto(id) {
+            const l = database.find(x => x.id === id);
+            if(!l) return;
+            const modalImg = document.getElementById('modal-img');
+            const modalName = document.getElementById('modal-name');
+            const modalMeta = document.getElementById('modal-meta');
+            const modal = document.getElementById('modal');
+
+            if(modalImg) modalImg.src = l.photo;
+            if(modalName) modalName.innerText = l.name;
+            if(modalMeta) modalMeta.innerText = `TIPE: ${l.type} | NIK: ${l.nik} | WAKTU: ${l.date} ${l.time}`;
+            if(modal) modal.classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        
+        function clearLogs() { 
+            Swal.fire({ title: 'HAPUS RIWAYAT LOKAL?', text: 'Data di Spreadsheet tidak akan terhapus.', icon: 'warning', showCancelButton: true, confirmButtonText: 'YA, BERSIHKAN', confirmButtonColor: '#000' }).then(r => {
+                if(r.isConfirmed) {
+                    database = []; otSessions = {}; 
+                    localStorage.removeItem('pdt_db_v3'); 
+                    localStorage.removeItem('pdt_ot_v3');
+                    renderLogs();
+                    resetForm();
+                }
+            });
+        }
+
+        // --- MINI GAME LOGIC ---
+        let gameActive = false, score = 0, boxes = [], currentBox = {}, speed = 2, direction = 1;
+        let gCanvas, gCtx;
+
+        function initGame() {
+            gCanvas = document.getElementById('game-canvas');
+            if (gCanvas) {
+                gCtx = gCanvas.getContext('2d');
+                gCanvas.addEventListener('mousedown', placeBox);
+            }
+        }
+
+        function startGame() {
+            if(!gCtx) initGame();
+            gameActive = true; score = 0;
+            boxes = [{ x: 100, y: 180, w: 100 }];
+            speed = 2.5; newBox();
+            const btn = document.getElementById('start-game-btn');
+            if(btn) btn.innerText = "RESTART";
+            animateGame();
+        }
+
+        function newBox() {
+            const last = boxes[boxes.length - 1];
+            currentBox = { x: 0, y: last.y - 20, w: last.w, color: `hsl(${Math.random() * 360}, 60%, 50%)` };
+        }
+
+        function animateGame() {
+            if(!gameActive || !gCtx) return;
+            gCtx.clearRect(0,0,300,200);
+            boxes.forEach(b => {
+                gCtx.fillStyle = '#000'; gCtx.fillRect(b.x, b.y, b.w, 20);
+                gCtx.strokeStyle = '#fff'; gCtx.strokeRect(b.x, b.y, b.w, 20);
+            });
+            gCtx.fillStyle = currentBox.color;
+            gCtx.fillRect(currentBox.x, currentBox.y, currentBox.w, 20);
+            gCtx.strokeRect(currentBox.x, currentBox.y, currentBox.w, 20);
+
+            currentBox.x += speed * direction;
+            if(currentBox.x + currentBox.w > 300 || currentBox.x < 0) direction *= -1;
+            requestAnimationFrame(animateGame);
+        }
+
+        function placeBox() {
+            if(!gameActive) return;
+            const last = boxes[boxes.length - 1];
+            const left = Math.max(currentBox.x, last.x);
+            const right = Math.min(currentBox.x + currentBox.w, last.x + last.w);
+            const w = right - left;
+
+            if(w <= 0) {
+                gameActive = false;
+                Swal.fire({ title: 'GAME OVER', text: `SKOR: ${score}`, icon: 'info' });
+                return;
+            }
+            boxes.push({ x: left, y: currentBox.y, w: w });
+            score++; 
+            const scoreEl = document.getElementById('game-score');
+            if(scoreEl) scoreEl.innerText = score;
+            speed += 0.15;
+            if(boxes.length > 6) boxes.forEach(b => b.y += 20);
+            newBox();
+        }
+
+        // --- BG 3D ---
+        function init3D() {
+            const bgCanvas = document.getElementById('canvas-bg');
+            if(!bgCanvas) return;
+            const renderer = new THREE.WebGLRenderer({ canvas: bgCanvas, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.z = 100;
+            const group = new THREE.Group();
+            for(let i=0; i<30; i++) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(10,10,10), new THREE.MeshBasicMaterial({ color:0, wireframe:true, opacity:0.04, transparent:true }));
+                m.position.set((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*100);
+                group.add(m);
+            }
+            scene.add(group);
+            function anim() { requestAnimationFrame(anim); group.rotation.y += 0.0005; group.rotation.x += 0.0002; renderer.render(scene, camera); }
+            anim();
+        }
+
+        window.addEventListener('mousemove', e => {
+            const c = document.getElementById('cursor-follower');
+            if(c) c.style.transform = `translate(${e.clientX}px, ${e.clientY}px) rotate(15deg)`;
+        });
+
+        window.onload = () => {
+            init3D(); initMedia(); updateUI();
+            setInterval(updateUI, 1000);
+            renderLogs();
+            validateButtons();
+            initGame();
+        };
+    </script>
+</body>
+</html>
