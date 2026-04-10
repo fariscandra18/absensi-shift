@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDT Warehouse - Mobile Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --block-yellow: #facc15;
+            --block-blue: #3b82f6;
+            --block-pink: #f472b6;
+            --block-green: #10b981;
+            --block-orange: #fb923c;
+            --block-black: #000000;
+            --block-white: #ffffff;
+            --shadow-offset: 6px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #f1f5f9;
+            color: var(--block-black);
+        }
+
+        #canvas-bg {
+            position: fixed;
+            top: 0; left: 0;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        .neo-block {
+            background: var(--block-white);
+            border: 3px solid var(--block-black);
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--block-black);
+            transition: all 0.1s ease;
+        }
+
+        .neo-block:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: calc(var(--shadow-offset) + 2px) calc(var(--shadow-offset) + 2px) 0px var(--block-black);
+        }
+
+        .block-yellow { background-color: var(--block-yellow); }
+        .block-blue { background-color: var(--block-blue); color: white; }
+        .block-pink { background-color: var(--block-pink); }
+        .block-green { background-color: var(--block-green); color: white; }
+        .block-orange { background-color: var(--block-orange); color: white; }
+
+        .neo-button {
+            border: 3px solid var(--block-black);
+            padding: 12px 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            box-shadow: 4px 4px 0px var(--block-black);
+            transition: all 0.05s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .neo-button:active:not(:disabled) {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px var(--block-black);
+        }
+
+        .neo-button:disabled {
+            background-color: #e2e8f0 !important;
+            color: #94a3b8 !important;
+            border-color: #cbd5e1 !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .scanner-container {
+            border: 3px solid var(--block-black);
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: var(--block-yellow);
+            box-shadow: 0 0 15px var(--block-yellow);
+            z-index: 20;
+            animation: moveScan 1.5s infinite alternate ease-in-out;
+            display: none;
+        }
+
+        @keyframes moveScan { from { top: 0; } to { top: 100%; } }
+
+        #cursor-follower {
+            position: fixed;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--block-black);
+            background: var(--block-yellow);
+            pointer-events: none;
+            z-index: 9999;
+            will-change: transform;
+            display: none;
+        }
+
+        @media (min-width: 1024px) { #cursor-follower { display: block; } }
+    </style>
+</head>
+<body>
+
+    <div id="cursor-follower"></div>
+    <canvas id="canvas-bg"></canvas>
+
+    <div class="min-h-screen w-full flex flex-col items-center p-4 md:p-10">
+        
+        <header class="w-full max-w-6xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+            <div class="neo-block block-yellow p-4 md:p-6 rotate-[-0.5deg]">
+                <h1 class="text-xl md:text-2xl font-bold tracking-tight uppercase leading-tight">
+                    Pancaran Darat Transport<br>
+                    <span class="bg-black text-white px-2 py-0.5 inline-block mt-1 text-sm">Absensi Mobile (All Area)</span>
+                </h1>
+                <p class="font-mono text-[10px] md:text-xs font-bold mt-2 border-t-2 border-black pt-1">
+                    GPS TRACKING // FLEXIBLE LOCATION
+                </p>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="neo-block p-4 flex flex-col items-end rotate-[0.5deg] min-w-[180px]">
+                    <div id="clock" class="text-3xl font-mono font-bold text-blue-600">00:00:00</div>
+                    <div id="date" class="text-xs font-bold uppercase tracking-tighter opacity-70">01/01/2024</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
+            
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                <div class="neo-block p-2">
+                    <div class="flex items-center justify-between p-2 font-bold text-xs uppercase border-b-2 border-black mb-2">
+                        <span><i class="fas fa-camera mr-2 text-red-500"></i>VERIFIKASI_WAJAH</span>
+                    </div>
+                    <div class="scanner-container aspect-video relative">
+                        <video id="video-feed" class="w-full h-full object-cover" autoplay playsinline muted style="transform: scaleX(-1);"></video>
+                        <div id="scan-bar" class="scan-line"></div>
+                        <div class="absolute top-4 left-4 z-10">
+                            <div class="bg-black text-white text-[10px] p-2 font-mono flex flex-col gap-1">
+                                <div class="flex items-center gap-2">
+                                    <div id="gps-dot" class="w-2 h-2 rounded-full bg-red-400"></div>
+                                    <span id="loc-status">MENDAPATKAN LOKASI...</span>
+                                </div>
+                                <div id="gps-coords" class="text-[8px] opacity-70">Lat: -- | Lng: --</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="neo-block p-6 space-y-6 bg-white border-4 border-black">
+                    <div class="space-y-3">
+                        <label class="font-bold text-xs uppercase tracking-widest text-black bg-yellow-400 px-2 py-1 inline-block">Pilih Nama Karyawan:</label>
+                        <div class="relative">
+                            <select id="emp-select" onchange="handleSelectionChange()" class="w-full border-4 border-black p-4 font-bold bg-white focus:bg-yellow-50 outline-none appearance-none cursor-pointer text-sm">
+                                <option value="">-- SILAHKAN PILIH NAMA --</option>
+                                <option value="17.98.23">MUHAMMAD KIKI KURNIAWAN</option>
+                                <option value="20.98.23">MOHAMAD SANUSI</option>
+                                <option value="02.99.25">FARIS CANDRA</option>
+                                <option value="05.23.26">ANDRIANUS TAMBUNAN</option>
+                            </select>
+                            <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-3">
+                            <p class="text-[9px] font-bold text-center border-b-2 border-black pb-1">ABSEN HARIAN</p>
+                            <button onclick="handleAbsen('MASUK')" id="btn-in" disabled class="neo-button block-green w-full">
+                                <i class="fas fa-sign-in-alt"></i> MASUK
+                            </button>
+                            <button onclick="handleAbsen('PULANG')" id="btn-out" disabled class="neo-button block-pink w-full">
+                                <i class="fas fa-sign-out-alt"></i> PULANG
+                            </button>
+                        </div>
+
+                        <div class="space-y-3">
+                            <p class="text-[9px] font-bold text-center border-b-2 border-black pb-1">LEMBUR (OT)</p>
+                            <button onclick="toggleOT('START')" id="btn-ot-start" disabled class="neo-button block-orange w-full">
+                                <i class="fas fa-clock"></i> OT IN
+                            </button>
+                            <button onclick="toggleOT('END')" id="btn-ot-end" disabled class="neo-button bg-gray-800 text-white w-full hidden">
+                                <i class="fas fa-stopwatch"></i> OT OUT
+                            </button>
+                            <div id="ot-disabled-placeholder" class="h-[46px] w-full border-2 border-gray-300 border-dashed flex items-center justify-center text-[8px] font-bold text-gray-400">
+                                OT OFF
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-2 border-t-2 border-black/10">
+                        <p class="text-[8px] text-center font-bold text-gray-400 italic">Catatan: Pastikan GPS Anda aktif sebelum menekan tombol.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 flex flex-col gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="neo-block p-4 flex flex-col items-center justify-center block-yellow">
+                        <span class="text-[10px] font-bold uppercase opacity-70">Log Hari Ini</span>
+                        <span id="stat-total" class="text-3xl font-bold">0</span>
+                    </div>
+                    <div class="neo-block p-4 block-blue flex flex-col items-center justify-center">
+                        <span class="text-[10px] font-bold uppercase opacity-70 text-white/80">Mode Absensi</span>
+                        <span class="text-sm font-bold flex items-center gap-2">
+                             <i class="fas fa-globe-asia animate-pulse"></i> SEMUA LOKASI DIAKTIFKAN
+                        </span>
+                    </div>
+                </div>
+
+                <div class="neo-block flex-1 flex flex-col overflow-hidden min-h-[400px]">
+                    <div class="p-4 border-b-3 border-black flex justify-between items-center bg-gray-50">
+                        <h2 class="font-bold uppercase flex items-center gap-2 text-sm">
+                            <i class="fas fa-history text-blue-600"></i> Riwayat Absensi & Lokasi
+                        </h2>
+                        <button onclick="clearLogs()" class="text-[9px] font-bold bg-red-100 border-2 border-black px-2 py-1 hover:bg-red-500 hover:text-white transition-colors">RESET</button>
+                    </div>
+                    
+                    <div id="log-container" class="overflow-y-auto max-h-[600px] divide-y-2 divide-black bg-white">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Foto -->
+    <div id="modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden p-4">
+        <div class="neo-block max-w-md w-full relative">
+            <button onclick="closeModal()" class="absolute -top-4 -right-4 w-10 h-10 bg-white border-3 border-black font-bold">X</button>
+            <img id="modal-img" src="" class="w-full border-b-3 border-black">
+            <div class="p-4 bg-yellow-400">
+                <h3 id="modal-name" class="font-bold text-sm uppercase"></h3>
+                <p id="modal-meta" class="text-[10px] font-mono mt-1"></p>
+                <div id="modal-map-link" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby7_Qgcq8ZDqI7cJhUUjgpocnhjvnNjMPO2bnM-jjP1O1_lwElOjJQU6I9UERghO5kLhg/exec"; 
+
+        let database = JSON.parse(localStorage.getItem('pdt_db_v4')) || [];
+        let otSessions = JSON.parse(localStorage.getItem('pdt_ot_v4')) || {}; 
+        let currentPos = { lat: null, lng: null };
+        let watchId = null;
+
+        function updateUI() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+            document.getElementById('date').innerText = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        async function initMedia() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 270, facingMode: "user" } });
+                document.getElementById('video-feed').srcObject = stream;
+            } catch(e) { 
+                console.warn("Camera access denied"); 
+            }
+            startLocationWatch();
+        }
+
+        function startLocationWatch() {
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (p) => {
+                        currentPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+                        document.getElementById('gps-coords').innerText = `Lat: ${currentPos.lat.toFixed(5)} | Lng: ${currentPos.lng.toFixed(5)}`;
+                        document.getElementById('loc-status').innerText = "GPS TERKUNCI";
+                        document.getElementById('gps-dot').className = "w-2 h-2 rounded-full bg-green-500";
+                        validateButtons();
+                    },
+                    (err) => {
+                        document.getElementById('loc-status').innerText = "GPS TIDAK AKTIF";
+                        document.getElementById('gps-dot').className = "w-2 h-2 rounded-full bg-red-600 animate-pulse";
+                    },
+                    { enableHighAccuracy: true }
+                );
+            }
+        }
+
+        function handleSelectionChange() {
+            checkOTStatus();
+            validateButtons();
+        }
+
+        function checkOTStatus() {
+            const nik = document.getElementById('emp-select').value;
+            const btnIn = document.getElementById('btn-ot-start');
+            const btnOut = document.getElementById('btn-ot-end');
+            const placeholder = document.getElementById('ot-disabled-placeholder');
+
+            if (nik && otSessions[nik]) {
+                btnIn.classList.add('hidden');
+                btnOut.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                btnIn.classList.remove('hidden');
+                btnOut.classList.add('hidden');
+                placeholder.classList.add('hidden');
+            }
+        }
+
+        function validateButtons() {
+            const select = document.getElementById('emp-select');
+            const hasName = select && select.value !== "";
+            // Tombol aktif jika nama dipilih (GPS tidak memblokir tapi disarankan aktif)
+            ['btn-in', 'btn-out', 'btn-ot-start', 'btn-ot-end'].forEach(id => {
+                document.getElementById(id).disabled = !hasName;
+            });
+        }
+
+        function handleAbsen(type) {
+            const sel = document.getElementById('emp-select');
+            submitAction({ nik: sel.value, name: sel.options[sel.selectedIndex].text, type });
+        }
+
+        function toggleOT(action) {
+            const sel = document.getElementById('emp-select');
+            const nik = sel.value;
+            const now = new Date();
+
+            if(action === 'START') {
+                otSessions[nik] = { start: now.getTime() };
+                submitAction({ nik, name: sel.options[sel.selectedIndex].text, type: 'OT_MASUK' });
+            } else {
+                const dur = ((now.getTime() - otSessions[nik].start) / (1000 * 60 * 60)).toFixed(2);
+                submitAction({ nik, name: sel.options[sel.selectedIndex].text, type: 'OT_PULANG', duration: dur });
+                delete otSessions[nik];
+            }
+            localStorage.setItem('pdt_ot_v4', JSON.stringify(otSessions));
+            checkOTStatus();
+        }
+
+        async function submitAction(data) {
+            document.getElementById('scan-bar').style.display = 'block';
+            Swal.fire({ title: 'MEMPROSES...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 320; canvas.height = 180;
+            const video = document.getElementById('video-feed');
+            try { canvas.getContext('2d').drawImage(video, 0,0,320,180); } catch(e) {}
+            const photo = canvas.toDataURL('image/jpeg', 0.6);
+
+            const record = {
+                ...data,
+                id: Date.now(),
+                photo,
+                lat: currentPos.lat,
+                lng: currentPos.lng,
+                time: document.getElementById('clock').innerText,
+                date: document.getElementById('date').innerText,
+                synced: false
+            };
+
+            database.unshift(record);
+            localStorage.setItem('pdt_db_v4', JSON.stringify(database));
+            renderLogs();
+
+            // Kirim ke Google Sheets
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(record)
+                });
+                const target = database.find(x => x.id === record.id);
+                if(target) target.synced = true;
+                localStorage.setItem('pdt_db_v4', JSON.stringify(database));
+            } catch (e) { console.error("Sync failed"); }
+
+            document.getElementById('scan-bar').style.display = 'none';
+            renderLogs();
+            Swal.fire({ icon: 'success', title: 'ABSEN BERHASIL', text: 'Data sedang disinkronkan ke pusat.', timer: 2000, showConfirmButton: false });
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('log-container');
+            document.getElementById('stat-total').innerText = database.length;
+            
+            if (!container) return;
+            if (database.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-[10px] font-bold opacity-30">RIWAYAT KOSONG</div>`;
+                return;
+            }
+
+            container.innerHTML = database.map(l => {
+                let badge = "bg-gray-100";
+                if(l.type === 'MASUK') badge = "bg-green-100 text-green-800";
+                if(l.type === 'PULANG') badge = "bg-red-100 text-red-800";
+                if(l.type.includes('OT')) badge = "bg-orange-100 text-orange-800";
+
+                return `
+                <div class="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer" onclick="openPhoto(${l.id})">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 border-2 border-black overflow-hidden bg-gray-100">
+                            <img src="${l.photo}" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <p class="font-bold text-[10px] uppercase">${l.name}</p>
+                            <p class="text-[8px] font-mono opacity-50">${l.date} @ ${l.time}</p>
+                            <p class="text-[7px] font-bold text-blue-600"><i class="fas fa-map-marker-alt"></i> ${l.lat ? l.lat.toFixed(4)+','+l.lng.toFixed(4) : 'Tanpa GPS'}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                        <span class="px-2 py-0.5 border border-black text-[8px] font-bold uppercase ${badge}">
+                            ${l.type} ${l.duration ? '('+l.duration+' Jam)' : ''}
+                        </span>
+                        <span class="text-[6px] font-bold ${l.synced ? 'text-green-500' : 'text-gray-400'}">${l.synced ? 'SYNCED' : 'PENDING'}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openPhoto(id) {
+            const l = database.find(x => x.id === id);
+            if(!l) return;
+            document.getElementById('modal-img').src = l.photo;
+            document.getElementById('modal-name').innerText = l.name;
+            document.getElementById('modal-meta').innerText = `${l.type} | NIK: ${l.nik} | ${l.date} ${l.time}`;
+            
+            const mapLink = document.getElementById('modal-map-link');
+            if(l.lat && l.lng) {
+                mapLink.innerHTML = `<a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" class="block w-full text-center bg-black text-white text-[10px] font-bold py-2 rounded">LIHAT DI GOOGLE MAPS</a>`;
+            } else {
+                mapLink.innerHTML = `<p class="text-[8px] text-red-600 font-bold italic">Koordinat GPS tidak tersedia untuk data ini.</p>`;
+            }
+            
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        
+        function clearLogs() { 
+            Swal.fire({ title: 'Hapus riwayat lokal?', icon: 'warning', showCancelButton: true }).then(r => {
+                if(r.isConfirmed) {
+                    database = []; localStorage.removeItem('pdt_db_v4'); renderLogs();
+                }
+            });
+        }
+
+        function init3D() {
+            const bg = document.getElementById('canvas-bg');
+            const renderer = new THREE.WebGLRenderer({ canvas: bg, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.z = 50;
+            const points = [];
+            for(let i=0; i<50; i++) {
+                const m = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true, transparent: true, opacity: 0.2 }));
+                m.position.set((Math.random()-0.5)*100, (Math.random()-0.5)*100, (Math.random()-0.5)*50);
+                scene.add(m);
+                points.push(m);
+            }
+            function anim() { 
+                requestAnimationFrame(anim); 
+                points.forEach(p => { p.rotation.y += 0.01; p.position.y -= 0.05; if(p.position.y < -50) p.position.y = 50; });
+                renderer.render(scene, camera); 
+            }
+            anim();
+        }
+
+        window.addEventListener('mousemove', e => {
+            const c = document.getElementById('cursor-follower');
+            if(c) c.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+        });
+
+        window.onload = () => {
+            init3D(); initMedia(); updateUI();
+            setInterval(updateUI, 1000);
+            renderLogs();
+        };
+    </script>
+</body>
+</html>
